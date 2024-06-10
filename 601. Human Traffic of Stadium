@@ -1,0 +1,27 @@
+601. Human Traffic of Stadium problem from LeetCode website: https://leetcode.com/problems/human-traffic-of-stadium/description/
+Queried using: PostgreSQL
+
+Table: Stadium
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| id            | int     |
+| visit_date    | date    |
+| people        | int     |
++---------------+---------+
+Write a solution to display the records with three or more rows with consecutive id's, and the number of people is greater than or equal to 100 for each.
+Return the result table ordered by visit_date in ascending order.
+
+WITH cte AS (SELECT *,
+LEAD(people,1) OVER(order by visit_date) AS next_day,
+LEAD(people,2) OVER(order by visit_date) AS next_two_days,
+LAG(people,1) OVER(ORDER BY visit_date) AS last_day,
+LAG(people,2) OVER(ORDER BY visit_date) AS last_two_days
+FROM stadium)
+SELECT id, visit_date, people FROM cte 
+WHERE
+people>99 and next_day>99 and next_two_days>99
+OR
+people>99 and next_two_days>99 and last_day>99
+OR
+people>99 and last_day>99 and last_two_days>99;
