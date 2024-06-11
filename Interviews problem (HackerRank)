@@ -1,0 +1,69 @@
+Interviews problem from HackerRank website: https://www.hackerrank.com/challenges/interviews/problem
+Queried using: MS SQL Server
+
+Table: Contests
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| contest_id    | integer |
+| hacker_id     | integer |
+| name          | string  |
++---------------+---------+
+Table: Colleges
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| college_id    | integer |
+| contest_id    | integer |
++---------------+---------+
+Table: Challenges
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| challenge_id  | integer |
+| college_id    | integer |
++---------------+---------+
+Table: View_Stats
++--------------------+---------+
+| Column Name        | Type    |
++--------------------+---------+
+| challenge_id       | integer |
+| total_views        | integer |
+| total_unique_views | integer |
++--------------------+---------+
+Table: Submission_Stats
++---------------------------+---------+
+| Column Name               | Type    |
++---------------------------+---------+
+| challenge_id              | integer |
+| total_submissions         | integer |
+| total_accepted_submission | integer |
++---------------------------+---------+
+Samantha interviews many candidates from different colleges using coding challenges and contests.
+Write a query to print the contest_id, hacker_id, name, and the sums of total_submissions, total_accepted_submissions,
+total_views, and total_unique_views for each contest sorted by contest_id. Exclude the contest from the result if all four sums are 0.
+
+
+SELECT con.contest_id, con.hacker_id, con.name, 
+    SUM(total_submissions), 
+    SUM(total_accepted_submissions), 
+    SUM(total_views),
+    SUM(total_unique_views)
+FROM Contests con 
+JOIN Colleges col ON con.contest_id = col.contest_id
+JOIN Challenges ch ON col.college_id = ch.college_id
+LEFT JOIN 
+    (SELECT challenge_id,
+    SUM(total_views) AS total_views,
+    SUM(total_unique_views) AS total_unique_views
+    FROM View_Stats GROUP BY challenge_id) subq_view ON subq_view.challenge_id = ch.challenge_id
+LEFT JOIN
+    (SELECT challenge_id,
+     SUM(total_submissions ) AS total_submissions,
+     SUM(total_accepted_submissions) AS total_accepted_submissions 
+     FROM Submission_Stats GROUP BY challenge_id) subq_subm ON subq_subm.challenge_id = ch.challenge_id
+GROUP BY con.contest_id, con.hacker_id, con.name
+HAVING
+SUM(total_submissions) != 0 OR SUM(total_accepted_submissions) != 0 OR SUM(total_views) != 0 OR SUM(total_unique_views) != 0
+ORDER BY contest_id ASC;
+
