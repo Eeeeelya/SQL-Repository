@@ -9,6 +9,7 @@ Table: Contests
 | hacker_id     | integer |
 | name          | string  |
 +---------------+---------+
+
 Table: Colleges
 +---------------+---------+
 | Column Name   | Type    |
@@ -16,6 +17,7 @@ Table: Colleges
 | college_id    | integer |
 | contest_id    | integer |
 +---------------+---------+
+
 Table: Challenges
 +---------------+---------+
 | Column Name   | Type    |
@@ -23,6 +25,7 @@ Table: Challenges
 | challenge_id  | integer |
 | college_id    | integer |
 +---------------+---------+
+
 Table: View_Stats
 +--------------------+---------+
 | Column Name        | Type    |
@@ -31,6 +34,7 @@ Table: View_Stats
 | total_views        | integer |
 | total_unique_views | integer |
 +--------------------+---------+
+
 Table: Submission_Stats
 +---------------------------+---------+
 | Column Name               | Type    |
