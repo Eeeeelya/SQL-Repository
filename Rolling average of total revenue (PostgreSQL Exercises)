@@ -43,13 +43,13 @@ Output should contain date and revenue columns, sorted by the date. Remember to 
 
 Query:
 WITH cte AS
-(SELECT truncdate, AVG(dailyrevenue) OVER(ROWS BETWEEN 14 PRECEDING AND CURRENT ROW) revenue
-FROM
-(SELECT DATE_TRUNC('DAY', b.starttime) truncdate,
-SUM(CASE WHEN b.memid=0 THEN b.slots*f.guestcost ELSE b.slots*f.membercost END) dailyrevenue
-FROM cd.bookings b
-JOIN cd.facilities f ON b.facid = f.facid
-GROUP BY truncdate ORDER BY truncdate) subq)
- 
+   (SELECT truncdate, AVG(dailyrevenue) OVER(ROWS BETWEEN 14 PRECEDING AND CURRENT ROW) revenue
+   FROM
+      (SELECT DATE_TRUNC('DAY', b.starttime) truncdate,
+      SUM(CASE WHEN b.memid=0 THEN b.slots*f.guestcost ELSE b.slots*f.membercost END) dailyrevenue
+      FROM cd.bookings b
+      JOIN cd.facilities f ON b.facid = f.facid
+      GROUP BY truncdate ORDER BY truncdate) AS subq)
+
 SELECT TO_CHAR(truncdate, 'YYYY-MM-DD') date, revenue FROM cte
-WHERE truncdate BETWEEN '2012-08-01' AND '2012-08-31'
+WHERE truncdate BETWEEN '2012-08-01' AND '2012-08-31';
