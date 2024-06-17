@@ -1,0 +1,55 @@
+Calculate a rolling average of total revenue problem from PostgreSQL Exercises website: https://pgexercises.com/questions/aggregates/rollingavg.html
+Queried using: PostgreSQL
+
+Table: cd.members
++---------------+------------------------+
+| Column Name   | Type                   |
++---------------+------------------------+
+| memid         | integer                |
+| surname       | character varying(200) |
+| firstname     | character varying(200) |
+| address       | character varying(300) |
+| zipcode       | integer                |
+| telephone     | character varying(20)  |
+| recommendedby | integer                |
+| joindate      | timestamp              |
++---------------+------------------------+
+
+Table: cd.bookings
++---------------+------------------------+
+| Column Name   | Type                   |
++---------------+------------------------+
+| facid         | integer                |
+| memid         | integer                |
+| starttime     | timestamp              |
+| slots         | integer                |
++---------------+------------------------+
+
+Table: cd.facilities
++---------------------+------------------------+
+| Column Name         | Type                   |
++---------------------+------------------------+
+| facid               | integer                |
+| name                | character varying(100) |
+| membercost          | numeric                |
+| guestcost           | numeric                |
+| initialoutlay       | numeric                |
+| mounthlymaintenance | numeric                |
++---------------------+------------------------+
+
+Question:
+For each day in August 2012, calculate a rolling average of total revenue over the previous 15 days.
+Output should contain date and revenue columns, sorted by the date. Remember to account for the possibility of a day having zero revenue.
+
+Query:
+WITH cte AS
+(SELECT truncdate, AVG(dailyrevenue) OVER(ROWS BETWEEN 14 PRECEDING AND CURRENT ROW) revenue
+FROM
+(SELECT DATE_TRUNC('DAY', b.starttime) truncdate,
+SUM(CASE WHEN b.memid=0 THEN b.slots*f.guestcost ELSE b.slots*f.membercost END) dailyrevenue
+FROM cd.bookings b
+JOIN cd.facilities f ON b.facid = f.facid
+GROUP BY truncdate ORDER BY truncdate) subq)
+ 
+SELECT TO_CHAR(truncdate, 'YYYY-MM-DD') date, revenue FROM cte
+WHERE truncdate BETWEEN '2012-08-01' AND '2012-08-31'
