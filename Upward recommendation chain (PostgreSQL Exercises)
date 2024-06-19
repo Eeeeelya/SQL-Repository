@@ -1,0 +1,53 @@
+Produce a CTE that can return the upward recommendation chain for any member problem from PostgreSQL Exercises website: https://pgexercises.com/questions/recursive/getupwardall.html
+Queried using: PostgreSQL
+
+Table: cd.members
++---------------+------------------------+
+| Column Name   | Type                   |
++---------------+------------------------+
+| memid         | integer                |
+| surname       | character varying(200) |
+| firstname     | character varying(200) |
+| address       | character varying(300) |
+| zipcode       | integer                |
+| telephone     | character varying(20)  |
+| recommendedby | integer                |
+| joindate      | timestamp              |
++---------------+------------------------+
+
+Table: cd.bookings
++---------------+------------------------+
+| Column Name   | Type                   |
++---------------+------------------------+
+| facid         | integer                |
+| memid         | integer                |
+| starttime     | timestamp              |
+| slots         | integer                |
++---------------+------------------------+
+
+Table: cd.facilities
++---------------------+------------------------+
+| Column Name         | Type                   |
++---------------------+------------------------+
+| facid               | integer                |
+| name                | character varying(100) |
+| membercost          | numeric                |
+| guestcost           | numeric                |
+| initialoutlay       | numeric                |
+| mounthlymaintenance | numeric                |
++---------------------+------------------------+
+
+Question:
+Produce a CTE that can return the upward recommendation chain for any member. You should be able to select recommender from recommenders where member=x.
+Demonstrate it by getting the chains for members 12 and 22. Results table should have member and recommender, ordered by member ascending, recommender descending.
+
+Query:
+WITH RECURSIVE recommenders(member, recommender) AS 
+(SELECT memid, recommendedby FROM cd.members m
+UNION ALL 
+SELECT r.member, m.recommendedby FROM recommenders r
+JOIN cd.members m ON m.memid = r.recommender)
+
+SELECT r.member, r.recommender, m.firstname, m.surname FROM recommenders r
+JOIN cd.members m ON m.memid = r.recommender WHERE r.member = 12 OR r.member = 22
+ORDER BY r.member, r.recommender DESC
