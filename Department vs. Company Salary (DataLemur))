@@ -1,0 +1,47 @@
+Department vs. Company Salary problem from DataLemur website: https://datalemur.com/questions/sql-department-company-salary-comparison
+Queried using: PostgreSQL
+
+Table: employee 
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| employee_id   | integer |
+| name          | string  |
+| salary        | integer |
+| department_id | integer |
+| manager_id    | integer |            
++---------------+---------+
+
+Table: salary  
++----------------+---------+
+| Column Name    | Type    |
++----------------+---------+
+| salary_id     | integer  |
+| employee_id   | integer  |
+| amount        | integer  |
+| payment_date  | datetime |       
++---------------+----------+
+
+Question:
+Write a query to compare the average salary of employees in each department to the company's average salary for March 2024.
+Return the comparison result as 'higher', 'lower', or 'same' for each department. Display the department ID, payment month (in MM-YYYY format), and the comparison result.
+
+Query:
+WITH compavg AS(SELECT payment_date, AVG(amount)
+FROM salary 
+WHERE EXTRACT(month FROM payment_date) = '03'
+AND EXTRACT(year FROM payment_date) = '2024'
+GROUP BY payment_date),
+
+deptavg AS(SELECT e.department_id, TO_CHAR(s.payment_date, 'MM-YYYY') datemarch, AVG(s.amount)
+FROM employee e
+JOIN salary s ON e.employee_id = s.employee_id
+WHERE EXTRACT(month FROM payment_date) = '03'
+AND EXTRACT(year FROM payment_date) = '2024'
+GROUP BY e.department_id, datemarch)
+
+SELECT deptavg.department_id, deptavg.datemarch payment_date,
+CASE WHEN compavg.avg > deptavg.avg THEN 'lower'
+WHEN compavg.avg < deptavg.avg THEN 'higher'
+ELSE 'same' END AS comparison FROM deptavg,compavg 
+
