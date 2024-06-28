@@ -27,13 +27,13 @@ Write a query to compare the average salary of employees in each department to t
 Return the comparison result as 'higher', 'lower', or 'same' for each department. Display the department ID, payment month (in MM-YYYY format), and the comparison result.
 
 Query:
-WITH compavg AS(SELECT payment_date, AVG(amount)
+WITH compavg AS (SELECT payment_date, AVG(amount)
 FROM salary 
 WHERE EXTRACT(month FROM payment_date) = '03'
 AND EXTRACT(year FROM payment_date) = '2024'
 GROUP BY payment_date),
 
-deptavg AS(SELECT e.department_id, TO_CHAR(s.payment_date, 'MM-YYYY') datemarch, AVG(s.amount)
+deptavg AS (SELECT e.department_id, TO_CHAR(s.payment_date, 'MM-YYYY') datemarch, AVG(s.amount)
 FROM employee e
 JOIN salary s ON e.employee_id = s.employee_id
 WHERE EXTRACT(month FROM payment_date) = '03'
@@ -43,5 +43,6 @@ GROUP BY e.department_id, datemarch)
 SELECT deptavg.department_id, deptavg.datemarch payment_date,
 CASE WHEN compavg.avg > deptavg.avg THEN 'lower'
 WHEN compavg.avg < deptavg.avg THEN 'higher'
-ELSE 'same' END AS comparison FROM deptavg,compavg 
+ELSE 'same' END AS comparison
+FROM deptavg, compavg;
 
