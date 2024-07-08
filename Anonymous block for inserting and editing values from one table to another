@@ -1,0 +1,50 @@
+--Anonymous block for inserting and editing values from one table (language) to another (language_processing).
+--In language names that start with the word 'Simple' it will be replaced with the word 'Easy' and the language_id will start from 100 in increments of 10.
+--In language names without word 'Simple' the language_id will start from 1 in increments of 1.
+
+DO $$ 
+DECLARE 
+rec record;
+counter1 INTEGER := 1;
+counter2 INTEGER := 100;
+BEGIN
+FOR rec IN SELECT * FROM language
+LOOP
+IF SUBSTR(Rec.name, 0, 7) != 'Simple'
+THEN
+INSERT INTO language_processing (language_id, name, last_update)
+VALUES (counter1, Rec.name, CURRENT_DATE);
+counter1 := counter1+1;
+ELSIF SUBSTR(Rec.name, 0, 7) = 'Simple'
+THEN
+INSERT INTO language_processing (language_id, name, last_update)
+VALUES (counter2, REPLACE(Rec.name, 'Simple', 'Easy'), CURRENT_DATE);
+counter2 := counter2+10;
+RAISE NOTICE '%', SUBSTR(Rec.name, 0, 7);
+END IF;
+END LOOP;
+END;
+$$
+
+--Select will show the result of this insert.
+
+SELECT * FROM language_processing;  
+
+Table: language_processing
++--------------+---------------+---------------------+
+| language_id  | name          | last_update         |
++--------------+---------------+---------------------+
+| 1            | English       | 2024-07-08 00:00:00 |
+| 2            | Italian       | 2024-07-08 00:00:00 |
+| 3            | Japanese      | 2024-07-08 00:00:00 |
+| 4            | Mandarin      | 2024-07-08 00:00:00 |
+| 5            | French        | 2024-07-08 00:00:00 |
+| 6            | German        | 2024-07-08 00:00:00 |
+| 100          | Easy English  | 2024-07-08 00:00:00 |
+| 110          | Easy Italian  | 2024-07-08 00:00:00 |
+| 120          | Easy Japanese | 2024-07-08 00:00:00 |
+| 130          | Easy Mandarin | 2024-07-08 00:00:00 |
+| 140          | Easy French   | 2024-07-08 00:00:00 |
+| 150          | Easy German   | 2024-07-08 00:00:00 |
++--------------+---------------+---------------------+
+
