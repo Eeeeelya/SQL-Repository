@@ -1,0 +1,28 @@
+Create a simple counting function in PostgreSQL.
+
+-- First step. I'll create a simple table and insert some values into it
+CREATE TABLE salaries (emp_id serial PRIMARY KEY, salary INT);
+INSERT INTO salaries (emp_id, salary) VALUES (1, 1000), (2, 1500), (3, 2500), (4, 5000), (5, 8500);
+
+-- Second step. I will create a function, which will count the number of employees receiving salaries between certain specified limits
+CREATE FUNCTION Get_Emp_Count(salary_from int, salary_to int)
+RETURNS int
+LANGUAGE plpgsql
+AS
+$$
+DECLARE
+Emp_Count integer;
+BEGIN
+SELECT COUNT(*) INTO emp_count FROM salaries WHERE salary BETWEEN salary_from AND salary_to;
+RETURN Emp_Count;
+END;
+$$;
+
+-- Third step. Now I can use select with my function to count employees
+SELECT Get_Emp_Count(1000, 3000);
+
+--Output
+ get_emp_count
+---------------
+             3
+(1 row)
