@@ -1,4 +1,4 @@
-Create a simple counting function in PostgreSQL.
+Create a simple counting function in PostgreSQL using PL/pgSQL.
 
 -- First step. I'll create a simple table and insert some values into it
 CREATE TABLE salaries (emp_id serial PRIMARY KEY, salary INT);
