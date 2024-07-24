@@ -1,0 +1,104 @@
+--PL/pgSQL function for DVD Rental training database which allows to retrieve full information about the customer
+--and find out the potential cost of renting any film taking into account the membership discount.
+
+--there're two parameters: member_id (which allows to retrieve data about a specific customer)
+--and filmd (which allows to retrieve data about film and total cost of rental with membership discount if customer's level higher than 'common')
+--this function will return ten columns: rating of the customer based on total amount spent, customer's id, total amount spent, name, surname,
+--current membership level (gold, silver, bronze, common) which will affect on customer's discount, 
+--how much the customer must spend to move to the next level of membership, id of the film from the parameter, title of this film, total rate according to member's discount
+
+CREATE OR REPLACE FUNCTION Info_func(member_id INT, filmid INT)
+RETURNS TABLE
+	(rating BIGINT, mem_id SMALLINT, total_sum NUMERIC,
+	mem_name VARCHAR(45), mem_surname VARCHAR(45),
+	current_lvl TEXT, need_to_spend_to_lvl_up NUMERIC,
+  film_id INT, title VARCHAR, total_rate NUMERIC)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+RETURN QUERY
+
+--total purchase threshold for obtaining a discount
+WITH cte1 AS
+(SELECT 200.00 AS gold_thold,
+150.00 AS silver_thold,
+100 AS bronze_thold),
+
+cte2 AS
+(SELECT customer_id,
+DENSE_RANK() OVER (ORDER BY SUM(amount) DESC) rating,
+CASE WHEN SUM(amount) >= gold_thold THEN 'Gold'
+	WHEN SUM(amount) >= silver_thold AND SUm(amount) < gold_thold THEN 'Silver'
+	WHEN SUM(amount) >= bronze_thold AND SUM(amount) < silver_thold THEN 'Bronze'
+	ELSE 'Common'
+	END AS current_lvl,
+CASE WHEN SUM(amount) >= gold_thold THEN 0
+	WHEN SUM(amount) >= silver_thold AND SUM(amount) < gold_thold THEN gold_thold - SUM(amount)
+	WHEN SUM(amount) >= bronze_thold AND SUM(amount) < silver_thold THEN silver_thold - SUM(amount)
+	ELSE bronze_thold - SUM(amount)
+	END AS need_to_spend_to_lvl_up
+FROM payment, cte1
+GROUP BY customer_id, silver_thold, bronze_thold, gold_thold),
+
+cte3 AS
+  (SELECT cte2.rating,
+	pmt.customer_id mem_id,
+	SUM(amount) total_sum,
+	first_name AS mem_name,
+	last_name AS mem_surname,
+	cte2.current_lvl,
+	cte2.need_to_spend_to_lvl_up
+FROM payment pmt
+JOIN customer cus ON pmt.customer_id = cus.customer_id
+JOIN cte2 ON pmt.customer_id = cte2.customer_id
+WHERE pmt.customer_id = member_id
+GROUP BY pmt.customer_id, mem_name, mem_surname, cte2.current_lvl, cte2.need_to_spend_to_lvl_up, cte2.rating
+ORDER BY total_sum DESC)
+
+SELECT cte3.*, film.film_id, film.title,
+CASE WHEN cte3.current_lvl = 'Gold' THEN ROUND(film.rental_rate*0.7, 2)
+	WHEN cte3.current_lvl = 'Silver' THEN ROUND(film.rental_rate*0.8, 2)
+	WHEN cte3.current_lvl = 'Bronze' THEN ROUND(film.rental_rate*0.9, 2)
+	ELSE film.rental_rate END AS total_rate
+FROM cte3, film
+WHERE filmid = film.film_id;
+END;
+$$;
+
+------------------------------------------------------------------------------
+--now i'll try to retrieve something using this function
+
+SELECT * FROM Info_func(150,2)
+Data Output:
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| rating    | mem_id    | total_sum    | mem_name    | mem_surname    | current_lvl    | need_to_spend_to_lvl_up  | film_id | title                  | total_rate    |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| 256       | 150       | 94.78        | Danielle    | Daniels        | Common         | 5.22                     | 2       | Ace Goldfinger         | 4.99          |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+
+
+SELECT * FROM Info_func(20,2)
+Data Output:
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| rating    | mem_id    | total_sum    | mem_name    | mem_surname    | current_lvl    | need_to_spend_to_lvl_up  | film_id | title                  | total_rate    |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| 213       | 20        | 103.73       | Sharon      | Robinson       | Bronze         | 46.27                    | 2       | Ace Goldfinger         | 4.49          |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+
+SELECT * FROM Info_func(148,142)
+Data Output:
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| rating    | mem_id    | total_sum    | mem_name    | mem_surname    | current_lvl    | need_to_spend_to_lvl_up  | film_id | title                  | total_rate    |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| 1         | 148       | 211.55       | Eleanor     | Hunt           | Gold           | 0.00                     | 142     | Chicken Hellfighters   | 0.69          |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+
+SELECT * FROM Info_func(373,142)
+Data Output:
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| rating    | mem_id    | total_sum    | mem_name    | mem_surname    | current_lvl    | need_to_spend_to_lvl_up  | film_id | title                  | total_rate    |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+| 14        | 373       | 156.66       | Louis       | Leone          | Silver         | 43.34                    | 142     | Chicken Hellfighters   | 0.79          |
++-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+
+
