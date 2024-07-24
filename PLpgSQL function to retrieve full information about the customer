@@ -12,7 +12,7 @@ RETURNS TABLE
 	(rating BIGINT, mem_id SMALLINT, total_sum NUMERIC,
 	mem_name VARCHAR(45), mem_surname VARCHAR(45),
 	current_lvl TEXT, need_to_spend_to_lvl_up NUMERIC,
-  film_id INT, title VARCHAR, total_rate NUMERIC)
+	film_id INT, title VARCHAR, total_rate NUMERIC)
 LANGUAGE plpgsql
 AS $$
 BEGIN
@@ -41,13 +41,9 @@ FROM payment, cte1
 GROUP BY customer_id, silver_thold, bronze_thold, gold_thold),
 
 cte3 AS
-  (SELECT cte2.rating,
-	pmt.customer_id mem_id,
-	SUM(amount) total_sum,
-	first_name AS mem_name,
-	last_name AS mem_surname,
-	cte2.current_lvl,
-	cte2.need_to_spend_to_lvl_up
+(SELECT cte2.rating, pmt.customer_id mem_id, SUM(amount) total_sum,
+first_name AS mem_name, last_name AS mem_surname,
+cte2.current_lvl, cte2.need_to_spend_to_lvl_up
 FROM payment pmt
 JOIN customer cus ON pmt.customer_id = cus.customer_id
 JOIN cte2 ON pmt.customer_id = cte2.customer_id
@@ -62,6 +58,7 @@ CASE WHEN cte3.current_lvl = 'Gold' THEN ROUND(film.rental_rate*0.7, 2)
 	ELSE film.rental_rate END AS total_rate
 FROM cte3, film
 WHERE filmid = film.film_id;
+
 END;
 $$;
 
@@ -100,5 +97,59 @@ Data Output:
 +-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
 | 14        | 373       | 156.66       | Louis       | Leone          | Silver         | 43.34                    | 142     | Chicken Hellfighters   | 0.79          |
 +-----------+-----------+--------------+-------------+----------------+----------------+--------------------------+---------+------------------------+---------------+
+
+------------------------------------------------------------------------------
+--also, using anonymous blocks, it is possible to retrieve the full list of customers without persisting in the database.
+--there's no way to pass parameters to an anonymous block, so there's no way to see discounts and total rates
+
+DO $$
+DECLARE
+rec record;  membership VARCHAR(50); remain NUMERIC(5,2);
+gold_thold CONSTANT NUMERIC = 200; silver_thold CONSTANT NUMERIC = 150; bronze_thold CONSTANT NUMERIC = 100;
+BEGIN FOR rec IN
+SELECT a.customer_id,
+SUM(amount) AS total_payments,
+b.first_name,
+b.last_name,
+DENSE_RANK() OVER (ORDER BY SUM(amount) DESC) AS rating
+FROM payment a
+JOIN customer b ON a.customer_id = b.customer_id
+GROUP BY a.customer_id, b.first_name, b.last_name ORDER BY total_payments DESC
+LOOP
+IF rec.total_payments >= gold_thold THEN membership := 'Gold'; 
+	ELSIF rec.total_payments >= silver_thold AND rec.total_payments < gold_thold THEN membership := 'Silver';
+	ELSIF rec.total_payments >= bronze_thold AND rec.total_payments < silver_thold THEN membership := 'Bronze';
+	ELSE membership := 'Common';
+	END IF;
+IF membership = 'Gold' THEN remain = 0;
+	ELSIF membership = 'Silver' THEN remain = gold_thold - rec.total_payments;
+	ELSIF membership = 'Bronze' THEN remain = silver_thold - rec.total_payments;
+	ELSE remain = bronze_thold - rec.total_payments;
+	END IF;
+IF membership = 'Gold' THEN RAISE NOTICE 'rating:%, id:%, name:%, surname:%, current lvl:%, sum:%',
+	rec.rating, rec.customer_id, rec.first_name, rec.last_name, membership, rec.total_payments;
+	ELSIF membership = 'Silver' THEN RAISE NOTICE 'rating:%, id:%, name:%, surname:%, current lvl:%, sum:%, need to spend to get Gold:%',
+	rec.rating, rec.customer_id, rec.first_name, rec.last_name, membership, rec.total_payments, remain;
+	ELSIF membership = 'Bronze' THEN RAISE NOTICE 'rating:%, id:%, name:%, surname:%, current lvl:%, sum:%, need to spend to get Silver:%',
+	rec.rating, rec.customer_id, rec.first_name, rec.last_name, membership, rec.total_payments, remain;
+	ELSIF membership = 'Common' THEN RAISE NOTICE 'rating:%, id:%, name:%, surname:%, current lvl:%, sum:%, need to spend to get Bronze:%',
+	rec.rating, rec.customer_id, rec.first_name, rec.last_name, membership, rec.total_payments, remain;
+	END IF;
+END LOOP;
+END;
+$$;
+
+
+Messages:
+NOTICE:  rating:1, id:148, name:Eleanor, surname:Hunt, current lvl:Gold, sum:211.55
+NOTICE:  rating:2, id:526, name:Karl, surname:Seal, current lvl:Gold, sum:208.58
+NOTICE:  rating:3, id:178, name:Marion, surname:Snyder, current lvl:Silver, sum:194.61, need to spend to get Gold:5.39
+NOTICE:  rating:4, id:137, name:Rhonda, surname:Kennedy, current lvl:Silver, sum:191.62, need to spend to get Gold:8.38
+NOTICE:  rating:5, id:144, name:Clara, surname:Shaw, current lvl:Silver, sum:189.60, need to spend to get Gold:10.40
+NOTICE:  rating:6, id:459, name:Tommy, surname:Collazo, current lvl:Silver, sum:183.63, need to spend to get Gold:16.37
+NOTICE:  rating:7, id:181, name:Ana, surname:Bradley, current lvl:Silver, sum:167.67, need to spend to get Gold:32.33
+NOTICE:  rating:8, id:410, name:Curtis, surname:Irby, current lvl:Silver, sum:167.62, need to spend to get Gold:32.38
+NOTICE:  rating:9, id:236, name:Marcia, surname:Dean, current lvl:Silver, sum:166.61, need to spend to get Gold:33.39
+                                                   ...
 
 
