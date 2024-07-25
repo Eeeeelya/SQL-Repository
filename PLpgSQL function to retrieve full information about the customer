@@ -107,7 +107,7 @@ SELECT * FROM Info_func(9999,1)
 Messages:
 ERROR:  Customer ID:9999 or film ID:1 does not exist.
 HINT:  Check IDs in the SELECT statement.
-CONTEXT:  функция PL/pgSQL info_func(integer,integer), line 47, operator RAISE 
+CONTEXT:  function PL/pgSQL info_func(integer,integer), line 47, operator RAISE 
 
 ERROR:  Customer ID:9999 or film ID:1 does not exist.
 SQL state: P0001
