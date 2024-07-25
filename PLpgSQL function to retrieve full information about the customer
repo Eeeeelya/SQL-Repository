@@ -60,7 +60,8 @@ FROM cte3, film
 WHERE filmid = film.film_id;
 
 IF NOT FOUND THEN
-RAISE 'Customer ID:% or film ID:% not found. Check your parameters.', member_id, filmid;
+RAISE EXCEPTION 'Customer ID:% or film ID:% does not exist.', member_id, filmid
+USING HINT = 'Check IDs in the SELECT statement.';
 END IF;
 
 END;
@@ -104,9 +105,11 @@ Data Output:
 
 SELECT * FROM Info_func(9999,1)
 Messages:
-ERROR:  Customer ID:9999 or film ID:1 not found. Check your parameters.
+ERROR:  Customer ID:9999 or film ID:1 does not exist.
+HINT:  Check IDs in the SELECT statement.
 CONTEXT:  функция PL/pgSQL info_func(integer,integer), line 47, operator RAISE 
-ERROR:  Customer ID:9999 or film ID:2 not found. Check your parameters.
+
+ERROR:  Customer ID:9999 or film ID:1 does not exist.
 SQL state: P0001
 
 
