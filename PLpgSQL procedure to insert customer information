@@ -1,0 +1,200 @@
+--PL/pgSQL procedure for DVD Rental training database that allows you to insert customer information, the movie rental, and update the personal discount based on the customer's membership level
+
+--The first step is to create a table into which the data will later be inserted
+DROP TABLE IF EXISTS history;
+CREATE TABLE history
+	(
+	transaction_id INT PRIMARY KEY,
+	mem_id INT REFERENCES customer(customer_id),
+	total_sum NUMERIC,
+	mem_name VARCHAR(50),
+	mem_surname VARCHAR(50),
+	current_lvl TEXT,
+	need_to_spend_to_lvl_up NUMERIC (10,2),
+	film_id INT REFERENCES film(film_id),
+	title VARCHAR(100),
+	total_rate NUMERIC (10,2),
+	purchase_time TIMESTAMP
+	);
+
+--The second step is to create a table that later will contain all existing customers, their current membership level and their total sum
+DROP TABLE IF EXISTS customer_privilege;
+CREATE TABLE customer_privilege AS 
+select customer_id, 0.00 as purchase_sum, 1 as current_lvl FROM customer;
+
+--The third step is to create a sequence that will be used a the transaction_id
+CREATE SEQUENCE seq_history
+INCREMENT 1
+START 0;
+
+--Procedure itself
+--Procedure will have two IN parameters: ID of the customer (i_customer_id) and ID of the film (i_film_id)
+CREATE OR REPLACE PROCEDURE insert_proc(i_customer_id INT, i_film_id INT)
+LANGUAGE plpgsql    
+AS $$
+--declaration of variables and thresholds for every membership level
+DECLARE
+l_gold_thold NUMERIC := 200.00;
+l_silver_thold NUMERIC := 150.00;
+l_bronze_thold NUMERIC := 100.00;
+l_gold_dsc NUMERIC := 0.7;
+l_silver_dsc NUMERIC := 0.8;
+l_bronze_dsc NUMERIC := 0.9;
+l_current_dsc NUMERIC := 1.0;
+l_rental_rate NUMERIC;
+l_customer_id INT;
+l_current_transaction_id BIGINT;
+l_mem_name VARCHAR(50);
+l_mem_surname VARCHAR(50);
+l_title VARCHAR(100);
+l_total_purchased NUMERIC;
+l_current_lvl TEXT;
+l_total_rate NUMERIC;
+l_need_to_spend_to_lvl_up NUMERIC := 100.00;
+l_current_lvl_n SMALLINT;
+
+--ID of the customer, name, surname, ID of the film and title will be inserted from the database tables without any changes.
+--The rental rate will depend on the client's sum amount, as well as the client's current membership level, also there will be a "need_to_spen_to_lvl_up" - 
+--a column representing the difference between the threshold and the client's current amount
+--The discount will affect the total rate the moment the current transaction exceeds the next level threshold
+BEGIN
+
+	SELECT rental_rate, title INTO l_rental_rate, l_title FROM film where i_film_id = film.film_id;
+	IF NOT FOUND THEN RAISE EXCEPTION 'Film id:% is not found', i_film_id;
+	END IF;
+
+	SELECT first_name, last_name INTO l_mem_name, l_mem_surname FROM customer WHERE i_customer_id = customer.customer_id;
+	IF NOT FOUND THEN RAISE EXCEPTION 'Customer id:% is not found', i_customer_id;
+	END IF;
+
+	MERGE INTO customer_privilege AS tgt
+	USING (SELECT * FROM customer WHERE customer.customer_id = i_customer_id) AS src
+	ON (tgt.customer_id = src.customer_id)
+	WHEN NOT MATCHED THEN
+	INSERT (customer_id, purchase_sum, current_lvl) VALUES (src.customer_id, 0.00, 1);
+
+	SELECT nextval('seq_history') INTO l_current_transaction_id;
+
+	INSERT INTO history (mem_id, film_id, transaction_id) VALUES (i_customer_id, i_film_id, l_current_transaction_id);
+
+	UPDATE customer_privilege SET purchase_sum = purchase_sum + l_rental_rate WHERE customer_privilege.customer_id = i_customer_id;
+	
+	SELECT purchase_sum INTO l_total_purchased FROM customer_privilege WHERE customer_privilege.customer_id = i_customer_id;
+	
+	IF l_total_purchased >= l_gold_thold THEN l_current_lvl := 'Gold'; l_current_lvl_n := 4; l_current_dsc := l_gold_dsc; l_need_to_spend_to_lvl_up := 0;
+	ELSIF l_total_purchased >= l_silver_thold THEN l_current_lvl := 'Silver';  l_current_lvl_n := 3;  l_current_dsc := l_silver_dsc; l_need_to_spend_to_lvl_up := l_gold_thold - l_total_purchased;
+	ELSIF l_total_purchased >= l_bronze_thold THEN l_current_lvl := 'Bronze';  l_current_lvl_n := 2;  l_current_dsc := l_bronze_dsc; l_need_to_spend_to_lvl_up := l_silver_thold - l_total_purchased;
+	ELSE l_current_lvl = 'Common'; l_need_to_spend_to_lvl_up := l_bronze_thold - l_total_purchased;  l_current_lvl_n := 1; 
+	END IF;
+
+	UPDATE customer_privilege SET current_lvl = l_current_lvl_n where customer_privilege.customer_id = i_customer_id;
+
+	l_total_rate := l_rental_rate * l_current_dsc;
+
+	UPDATE history SET mem_name = l_mem_name, total_sum = l_total_purchased, mem_surname = l_mem_surname,
+		                 current_lvl = l_current_lvl, need_to_spend_to_lvl_up = l_need_to_spend_to_lvl_up,
+                     title = l_title, total_rate = l_total_rate, purchase_time = NOW() where transaction_id = l_current_transaction_id;
+
+END; $$;
+
+--Now I'll test this procedure using anonymous block and CALL operator. Let's imagine that customer with ID 10 rented film with ID 10 fifty times, customer with ID 15 rented film with ID 45 thirty times
+--customer with ID 3 rented film with ID 40 one time.
+
+DO $$
+DECLARE
+a INT;
+BEGIN
+FOR a IN 1..50 LOOP
+CALL insert_proc(10,10);
+END LOOP;
+END; $$;
+
+DO $$
+DECLARE
+a INT;
+BEGIN
+FOR a IN 1..30 LOOP
+CALL insert_proc(15,45);
+END LOOP;
+END; $$;
+
+CALL insert_proc(3,40);
+
+--if an ID that is not present in the customers and movie tables is used as a i_customer_id or i_film_id parameter, an exception will be raised
+
+CALL insert_proc(9999, 1)
+
+Messages:
+ERROR:  Customer id:9999 is not found
+CONTEXT:  function PL/pgSQL insert_proc(integer,integer), line 28, operator RAISE 
+
+ERROR:  Customer id:9999 is not found
+SQL state: P0001
+
+
+--Now I will retrieve all the inserted data
+SELECT * FROM history;
+
+Data Output:
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| transaction_id | mem_id | total_sum | mem_name  | mem_surname | current_lvl | need_to_spend_to_lvl_up | film_id | title             | total_rate | purchase_time              |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 1              | 10     | 4.99      | Dorothy   | Taylor      | Common      | 95.01                   | 10      | Alladin Calendar  | 4.99       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 2              | 10     | 9.98      | Dorothy   | Taylor      | Common      | 90.02                   | 10      | Alladin Calendar  | 4.99       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 3              | 10     | 14.97     | Dorothy   | Taylor      | Common      | 85.03                   | 10      | Alladin Calendar  | 4.99       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+
+                                                                                        ...
+
+--Total sum of a 21st transaction exceeds threshold and takes customer to the Bronze membership level, and now he has 10% discount for this and all next transactions
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| transaction_id | mem_id | total_sum | mem_name  | mem_surname | current_lvl | need_to_spend_to_lvl_up | film_id | title             | total_rate | purchase_time              |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 20             | 10     | 99.80     | Dorothy   | Taylor      | Common      | 0.20                    | 10      | Alladin Calendar  | 4.99       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 21             | 10     | 104.79    | Dorothy   | Taylor      | Bronze      | 45.21                   | 10      | Alladin Calendar  | 4.49       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+
+                                                                                        ...
+
+--Total sum of a 31st transaction exceeds threshold and takes customer to the Silver membership level, and now he has 20% discount for this and all next transactions
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| transaction_id | mem_id | total_sum | mem_name  | mem_surname | current_lvl | need_to_spend_to_lvl_up | film_id | title             | total_rate | purchase_time              |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 31             | 10     | 154.69    | Dorothy   | Taylor      | Silver      | 45.31                   | 10      | Alladin Calendar  | 3.99       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+
+                                                                                        ...
+
+--Finally, total sum of a 41st transaction exceeds threshold and takes customer to the Gold membership level, now he has 30% discount for this and all next transactions
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| transaction_id | mem_id | total_sum | mem_name  | mem_surname | current_lvl | need_to_spend_to_lvl_up | film_id | title             | total_rate | purchase_time              |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+| 41             | 10     | 204.59    | Dorothy   | Taylor      | Gold        | 0.00                    | 10      | Alladin Calendar  | 3.49       | 2024-08-07 22:16:03.160406 |
++----------------+--------+-----------+-----------+-------------+-------------+-------------------------+---------+-------------------+------------+----------------------------+
+
+--And now I'll retrieve the data from the customer_privilege table and order it by sum.
+--Current level in the customer_privilege table is indicated by numbers. 4 - 'Gold', 3 - 'Silver', 2 - 'Bronze', 1 - 'Common' (default value).
+SELECT * FROM customer_privilege ORDER BY purchase_sum DESC;
+
++-------------+--------------+-------------+
+| customer_id | purchase_sum | current_lvl |
++-------------+--------------+-------------+
+| 10          | 249.50       | 4           |
++-------------+--------------+-------------+
+| 15          | 149.70       | 2           |
++-------------+--------------+-------------+
+| 3           | 0.99         | 1           |
++-------------+--------------+-------------+
+| 1           | 0.00         | 1           |
++-------------+--------------+-------------+
+| 2           | 0.00         | 1           |
++-------------+--------------+-------------+
+                    ...
+  
+
+
+
+
